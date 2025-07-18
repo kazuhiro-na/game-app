@@ -20,6 +20,16 @@ let bullets = [], enemies = [], healthPacks = [];
 const bulletSpeed = 1.5;
 const enemyBaseSpeed = 0.02;
 
+// Warning System UI Elements
+const warningOverlay = document.getElementById('warning-overlay');
+const directionIndicator = document.getElementById('direction-indicator');
+
+// Warning System Variables
+const warningDistance = 20; // Distance at which warning activates
+let warningActive = false;
+let warningFlashInterval = 100; // Milliseconds for flash
+let lastWarningFlashTime = 0;
+
 const enemyTypes = [
     { name: 'Goblin', color: 0x8B4513, health: 20, speed: 0.03, attackDamage: 5, attackCooldown: 1000 },
     { name: 'Skeleton', color: 0xC0C0C0, health: 30, speed: 0.025, attackDamage: 10, attackCooldown: 1500 },
@@ -306,7 +316,7 @@ function animate() {
         let hit = false;
         for (let j = enemies.length - 1; j >= 0; j--) {
             if (bullet.position.distanceTo(enemies[j].mesh.position) < 1.5) {
-                enemyTakeDamage(j, 25); // Assuming 25 damage per bullet for now
+                enemyTakeDamage(j, 120); // Assuming 120 damage per bullet for now
                 scene.remove(bullet);
                 bullets.splice(i, 1);
                 hit = true;
@@ -321,6 +331,9 @@ function animate() {
     }
 
     // Update Enemies
+    let closestEnemyDistance = Infinity;
+    let closestEnemyDirection = new THREE.Vector3();
+
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
         enemy.mesh.lookAt(player.mesh.position);
@@ -336,6 +349,37 @@ function animate() {
                 gameOver();
             }
         }
+
+        // Warning system: Calculate distance and direction to closest enemy
+        const distance = enemy.mesh.position.distanceTo(player.mesh.position);
+        if (distance < closestEnemyDistance) {
+            closestEnemyDistance = distance;
+            closestEnemyDirection.subVectors(enemy.mesh.position, player.mesh.position).normalize();
+        }
+    }
+
+    // Update warning overlay and direction indicator
+    if (closestEnemyDistance < warningDistance) {
+        warningActive = true;
+        const now = performance.now();
+        if (now - lastWarningFlashTime > warningFlashInterval) {
+            warningOverlay.style.backgroundColor = warningOverlay.style.backgroundColor === 'rgba(255, 0, 0, 0.2)' ? 'rgba(255, 0, 0, 0)' : 'rgba(255, 0, 0, 0.2)';
+            lastWarningFlashTime = now;
+        }
+
+        // Calculate angle for direction indicator
+        const playerForward = new THREE.Vector3();
+        player.mesh.getWorldDirection(playerForward);
+        playerForward.y = 0; // Ignore vertical component for horizontal direction
+        playerForward.normalize();
+
+        const angle = Math.atan2(closestEnemyDirection.z, closestEnemyDirection.x) - Math.atan2(playerForward.z, playerForward.x);
+        directionIndicator.style.transform = `translateX(-50%) rotate(${-angle * (180 / Math.PI)}deg)`;
+        directionIndicator.style.display = 'block';
+    } else {
+        warningActive = false;
+        warningOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0)'; // Ensure transparent
+        directionIndicator.style.display = 'none';
     }
 
     // Check for health pack collision
